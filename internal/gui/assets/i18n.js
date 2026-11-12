@@ -4,6 +4,11 @@
 // works. {name} slots are filled by t(str, vars).
 const I18N = {
   zh: {
+    "In rings, the center shows reserve above and deficit below, relative to an even pace.": "圆环中心以均匀消耗节奏为基准，上方表示盈余，下方表示透支。",
+    "Live activity unavailable": "实时活动状态不可用",
+    "Active requests": "执行中的请求",
+    "Compact quota rings": "紧凑额度环",
+    "One ring per subscription, using its first selected window. Each live model request adds a moving light. Hover for exact values, all windows and model counts.": "每个订阅一个圆环，取首个选中的周期。每个执行中的模型请求对应一条流光；悬停可看精确数值、全部周期和各模型请求数。",
     "Cards": "卡片",
     "Table": "表格",
     "Quick check": "快速检测",
@@ -5131,6 +5136,11 @@ const I18N = {
     "This report is no longer kept: magpie keeps the last 5.": "这份报告已经不在了：magpie 只保留最近 5 份。",
   },
   "zh-TW": {
+    "In rings, the center shows reserve above and deficit below, relative to an even pace.": "圓環中心以平均消耗速度為基準，上方表示盈餘，下方表示超支。",
+    "Live activity unavailable": "即時活動狀態無法取得",
+    "Active requests": "執行中的請求",
+    "Compact quota rings": "精簡額度環",
+    "One ring per subscription, using its first selected window. Each live model request adds a moving light. Hover for exact values, all windows and model counts.": "每個訂閱一個圓環，顯示第一個選取的週期。每個執行中的模型請求對應一道流光；游標停留可看精確數值、所有週期與各模型請求數。",
     "Cards": "卡片",
     "Table": "表格",
     "Quick check": "快速檢測",
@@ -10243,6 +10253,11 @@ const I18N = {
     "This report is no longer kept: magpie keeps the last 5.": "這份報告已經不在了：magpie 只保留最近 5 份。",
   },
   ja: {
+    "In rings, the center shows reserve above and deficit below, relative to an even pace.": "リングの中央は均等な使用ペースと比較し、上側が余裕、下側が超過を示します。",
+    "Live activity unavailable": "ライブ動作状況を取得できません",
+    "Active requests": "実行中のリクエスト",
+    "Compact quota rings": "コンパクトな利用枠リング",
+    "One ring per subscription, using its first selected window. Each live model request adds a moving light. Hover for exact values, all windows and model counts.": "サブスクリプションごとに最初の選択期間をリング表示します。実行中のモデルリクエストごとに光が流れます。正確な値、全期間、モデル別の件数はツールチップで確認できます。",
     "Cards": "カード",
     "Table": "表",
     "Quick check": "クイックチェック",
@@ -15357,6 +15372,11 @@ const I18N = {
     "This report is no longer kept: magpie keeps the last 5.": "このレポートはもう残っていません。magpie は最新の 5 件だけを保存します。",
   },
   de: {
+    "In rings, the center shows reserve above and deficit below, relative to an even pace.": "In Ringen zeigt die Mitte oben eine Reserve und unten eine Überschreitung gegenüber einem gleichmäßigen Verbrauch.",
+    "Live activity unavailable": "Live-Aktivität nicht verfügbar",
+    "Active requests": "Aktive Anfragen",
+    "Compact quota rings": "Kompakte Kontingentringe",
+    "One ring per subscription, using its first selected window. Each live model request adds a moving light. Hover for exact values, all windows and model counts.": "Ein Ring je Abonnement zeigt das erste ausgewählte Zeitfenster. Für jede laufende Modellanfrage bewegt sich ein Licht. Genaue Werte, alle Zeitfenster und Modellzahlen stehen im Tooltip.",
     "Cards": "Karten",
     "Table": "Tabelle",
     "Quick check": "Schnelltest",

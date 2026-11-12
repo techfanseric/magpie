@@ -760,6 +760,72 @@ leaving suggested plugin cards in place so a click begun before the answer still
 opens the intended plugin. `plugin-market.test.cjs` holds the search response
 between pointerdown and pointerup to check this in Chromium and WebKit.
 
+### Compact quota rings on macOS
+
+Settings → Allowances → **Compact quota rings** (`settings.TrayRings`) is
+opt-in and local to this computer (`KeepOwn`). Existing installations keep
+their numeric cells. An older Settings page that omits the field preserves
+it, as does a browser save; the CLI can set `trayRings` through settingsapi.
+
+`trayRingCells` in [trayrings.go](../../internal/gui/trayrings.go) adapts the
+same selected cards read by `watchTrayUsage`. Each percentage card becomes
+a 22pt unit, with a provider initial above an open quota arc and 2pt between
+units. The arc represents the first window the card's numeric rows would
+show, following **Menu bar windows** (shortest first by default) and the
+existing used/left preference. Other windows and exact values remain in the
+existing tooltip; clicking retains the drawn card's provider/account ID.
+With the bird hidden, clicks keep the existing behavior of opening the panel
+on its last tab, rather than forcing Allowances.
+
+When **Menu bar pace** is on, the same window's `QuotaWindow.Pace` becomes a
+static center fan: reserve above, deficit below, full at a 25 percentage
+point deviation from even usage. Its direction is independent of whether
+the arc shows used or remaining quota. A missing reset/span gives no fan.
+At 10% remaining or less the ring is orange. An unread or expired window has
+an unknown mark; a failed reading has a red dash, including when its card
+would otherwise have no numeric label. Neither is fabricated as 0% or 100%.
+
+Wallet balances, unlimited/text-only windows, and magpie's token/cost totals
+keep the numeric/text rendering. **Menu bar logos** is hidden while rings
+are on; its preference is preserved for switching back. Windows and Linux
+keep their existing rendering. The ring mode adds no credential access, vendor request or dependency.
+Live request activity is read independently of quota refresh. Native geometry,
+theme color and hit testing share the existing `trayimage_darwin.go` path.
+
+`watchTrayActivity` follows the existing routing trace's change signal;
+`trayActivities` joins `Active.Route` to its unfinished try and matching
+`Weighed` destination. Only `phase=upstream` counts: each live request is
+counted once on its actual provider/account and model, including fallbacks.
+Queued (`slot`/`rpm`), masking and unattributed work are not assigned to a
+subscription. A peer process is read through the existing loopback-only
+trace and concurrency APIs (`OwnerTrace`, `OwnerActive`). A failed peer read
+clears motion and says **Live activity unavailable**, rather than idle.
+The retained activity map strips prompt/reply context from the trace.
+
+One live upstream request draws one moving light around its card's arc,
+up to five, with the exact count and model breakdown in the tooltip. This
+is request concurrency, not complete agent-task concurrency: a tool gap,
+work bypassing magpie, or a bridge without an attributed upstream phase
+is not inferred to be a running model request. Retry attempts do not add
+waves. Completion, cancellation, a missing route or a gateway-owner change
+removes old activity. Numeric mode does not read live activity.
+
+The native main-thread timer runs at 12 fps only while a visible ring is
+active. Idle or reduced-motion mode has no animation timer. System and
+app Reduce Motion leave stationary lights to preserve activity feedback;
+the system's accessibility notification updates motion immediately. No
+animation frame polls quota or reparses the routing trace. Preview frames
+use a fixed phase and synthetic concurrency through the same renderer.
+
+Verification: `TestTrayRingsUseSelectedWindowAndKeepCardIdentities`,
+`TestTrayRingUnknownIsNotAQuotaReading`,
+`TestTrayRingPaceUsesVendorsWindowAndReadTime`,
+`TestTrayRingNativeWidthAppearanceAndClicks`,
+`TestTrayRingsSurviveAnOlderPageAndStayLocal`, and
+`tests/tray-rings.test.cjs` (both engines and all five languages).
+`MAGPIE_TRAY_PREVIEW=<existing directory>` exports native comparison PNGs
+from the native test using synthetic accounts only.
+
 ### Routing shown by the magpie that serves the gateway
 
 A magpie on this computer that does not serve the gateway shows the serving

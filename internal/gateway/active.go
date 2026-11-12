@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"sort"
 	"sync"
@@ -194,4 +195,38 @@ func (s *Server) Active() []Active {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
+}
+
+// OwnerActive reads actual in-flight requests from the local serving magpie.
+// Older servers without the active field, refused reads and decode failures
+// return unknown. This is the same local-only owner as OwnerTrace.
+func OwnerActive(ctx context.Context) ([]Active, bool) {
+	base := ownerURL()
+	if base == "" {
+		return nil, false
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/v1/magpie/concurrency", nil)
+	if err != nil {
+		return nil, false
+	}
+	client := &http.Client{Timeout: time.Second}
+	res, err := client.Do(req)
+	if err != nil {
+		return nil, false
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return nil, false
+	}
+	b, err := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+	if err != nil {
+		return nil, false
+	}
+	var out struct {
+		Active *[]Active `json:"active"`
+	}
+	if decodeJSON(b, &out) != nil || out.Active == nil {
+		return nil, false
+	}
+	return *out.Active, true
 }

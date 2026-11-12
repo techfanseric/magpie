@@ -33,7 +33,7 @@ var Keys = []string{
 	"tray", "dock", "dockWindow", "dockNever", "lightweight", "keepAwake", "keepAwakeDisplay",
 	"noWSLAgents", "sessionTerminal", "signInLinkOnly", "quitNoAsk", "restoreOnQuit",
 	// the menu bar's allowance cards
-	"trayUsages", "trayUsage", "trayUsageEvery", "trayNoLogos", "trayNoBird", "trayNoNumber", "trayPace", "trayNoCost", "trayWindows",
+	"trayUsages", "trayUsage", "trayUsageEvery", "trayNoLogos", "trayNoBird", "trayNoNumber", "trayRings", "trayPace", "trayNoCost", "trayWindows",
 	// usage and alerts
 	"currency", "chineseUnits", "usageAlert", "balanceAlert", "resetReminder", "turnDoneAlert", "maskAlert",
 	// network
@@ -227,6 +227,10 @@ func Merge(body []byte, cur settings.Settings, web bool) (settings.Settings, err
 	}
 	if _, sent := fields["groupPatience"]; !sent {
 		in.GroupPatience = cur.GroupPatience
+	}
+	// Older pages do not send the optional native ring style.
+	if _, sent := fields["trayRings"]; !sent || web {
+		in.TrayRings = cur.TrayRings
 	}
 	// nor whether animations are stilled (#3813)
 	if _, sent := fields["reduceMotion"]; !sent {

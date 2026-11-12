@@ -7,6 +7,10 @@
 // (trayExtra: money aside, one model's, Cursor's Grok Bot, CrazyJal on X)
 // is offered too; its usual windows ticked alone are no pick at all.
 window.trayWindowsRow = function trayWindowsRow(s, keep, ids, mac) {
+  $("#trayRingsRow").hidden = !mac;
+  $("#trayRingsSegs").replaceChildren(segs([["off", t("Off")], ["on", t("On")]], s.trayRings ? "on" : "off",
+    (v) => savePrefs({ ...keep, trayRings: v === "on" })));
+  $("#trayPaceRow .sub").textContent = t(mac && s.trayRings ? "In rings, the center shows reserve above and deficit below, relative to an even pace." : "Each window's Pace number beside its figure, as on the Usage page: +12% is 12% more of the window used than an even pace would have used by now, −8% that much less");
   // Windows' tray shows no text: the first card's figure is its icon, or
   // the bird (Benjaminliang_1 on X)
   $("#trayNumberRow").hidden = !document.documentElement.classList.contains("win");

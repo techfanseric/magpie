@@ -11,6 +11,8 @@ func trayImageFrame([]byte) bool { return false }
 
 func trayImageHide() {}
 
+func trayImageActivity([]trayCell, bool) {}
+
 func trayHighlight(bool) {}
 
 func trayOwnClicks() {}

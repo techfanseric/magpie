@@ -20653,7 +20653,7 @@ function renderTrayUsage(s, keep) {
   $("#trayEverySegs").replaceChildren(segs(TRAY_EVERY.map((m) => [m, t("{n} min", { n: m })]), s.trayUsageEvery || 3,
     (trayUsageEvery) => savePrefs({ ...keep, trayUsageEvery })));
   // only the Mac's menu bar draws the cards, with their logos or without
-  $("#trayLogosRow").hidden = !ids.length || !mac;
+  $("#trayLogosRow").hidden = !ids.length || !mac || !!s.trayRings;
   $("#trayLogosSegs").replaceChildren(segs([["off", t("Off")], ["on", t("On")]], s.trayNoLogos ? "off" : "on",
     (v) => savePrefs({ ...keep, trayNoLogos: v === "off" })));
   // and beside magpie's icon or alone
@@ -20666,7 +20666,7 @@ function renderTrayUsage(s, keep) {
   $("#trayPaceSegs").replaceChildren(segs([["off", t("Off")], ["on", t("On")]], s.trayPace ? "on" : "off",
     (v) => savePrefs({ ...keep, trayPace: v === "on" })));
   // a card's windows
-  if (!ids.length) $("#trayWindowsRow").hidden = $("#trayNumberRow").hidden = true;
+  if (!ids.length) $("#trayRingsRow").hidden = $("#trayWindowsRow").hidden = $("#trayNumberRow").hidden = true;
   else import("./traywindows.js").then(() => trayWindowsRow(s, keep, ids, mac), () => {});
   // and the cost beside magpie's own totals, in their cards and the
   // tooltip, which every OS shows with or without cards (BussanQ)
@@ -22734,7 +22734,7 @@ function prefsKeep(s) {
     codexWarmAts: warmTimes(s.codexWarmAts, s.codexWarmAt), claudeWarmAts: warmTimes(s.claudeWarmAts, s.claudeWarmAt), workbuddyCheckin: !!s.workbuddyCheckin, traeCheckin: !!s.traeCheckin, minimaxCheckin: !!s.minimaxCheckin, qoderCheckin: !!s.qoderCheckin, checkinAt: s.checkinAt || "", noStats: !!s.noStats, noUsageStats: !!s.noUsageStats, signInLinkOnly: !!s.signInLinkOnly,
     replyModel: s.replyModel || "", noLoopGuard: !!s.noLoopGuard, claudeLeanPrompt: !!s.claudeLeanPrompt, claudePrintMode: !!s.claudePrintMode, refusalRetries: s.refusalRetries ?? null, retryAfterCap: s.retryAfterCap ?? null,
     noUpdatePill: !!s.noUpdatePill, noAutoUpdate: !!s.noAutoUpdate, updateEvery: s.updateEvery || 360, autoRestart: !!s.autoRestart, noAutoDownload: !!s.noAutoDownload, updateChannel: s.updateChannel || "",
-    trayUsage: s.trayUsage || "", trayUsageEvery: s.trayUsageEvery || 3, trayNoLogos: !!s.trayNoLogos, trayNoBird: !!s.trayNoBird, trayNoNumber: !!s.trayNoNumber, trayPace: !!s.trayPace, trayNoCost: !!s.trayNoCost, trayWindows: s.trayWindows || {}, vision: s.vision || "", visionEffort: s.visionEffort || "", searcherEffort: s.searcherEffort || "", imageGen: s.imageGen || "", videoGen: s.videoGen || "", imageTimeout: s.imageTimeout || 0, classifyTimeout: s.classifyTimeout || 0, searcher: s.searcher || "", searchFirst: s.searchFirst || "", currency: s.currency || "usd",
+    trayUsage: s.trayUsage || "", trayUsageEvery: s.trayUsageEvery || 3, trayNoLogos: !!s.trayNoLogos, trayNoBird: !!s.trayNoBird, trayNoNumber: !!s.trayNoNumber, trayRings: !!s.trayRings, trayPace: !!s.trayPace, trayNoCost: !!s.trayNoCost, trayWindows: s.trayWindows || {}, vision: s.vision || "", visionEffort: s.visionEffort || "", searcherEffort: s.searcherEffort || "", imageGen: s.imageGen || "", videoGen: s.videoGen || "", imageTimeout: s.imageTimeout || 0, classifyTimeout: s.classifyTimeout || 0, searcher: s.searcher || "", searchFirst: s.searchFirst || "", currency: s.currency || "usd",
     chineseUnits: !!s.chineseUnits, usageAlert: s.usageAlert || 0, balanceAlert: s.balanceAlert || 0, resetReminder: s.resetReminder || 0,
     turnDoneAlert: s.turnDoneAlert || 0, maskAlert: !!s.maskAlert };
 }

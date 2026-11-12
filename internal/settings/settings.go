@@ -645,6 +645,9 @@ type Settings struct {
 	// is its windows stacked alone, a thin line between one card and the
 	// next.
 	TrayNoLogos bool `json:"trayNoLogos,omitempty"`
+	// TrayRings draws each percentage card as a compact ring on macOS.
+	// Off by default; balances and local token totals remain text.
+	TrayRings bool `json:"trayRings,omitempty"`
 	// TrayNoBird leaves magpie's bird out of the Mac menu bar while the
 	// cards are there, the cards alone (KevinXC on Discord); a click on one
 	// still opens the panel, and with no cards the bird is shown.
@@ -1621,6 +1624,7 @@ func (s *Settings) KeepOwn(cur Settings) {
 	s.WindowAt = cur.WindowAt
 	s.TrayUsages, s.TrayUsage, s.TrayUsageEvery, s.TrayNoLogos, s.TrayNoBird, s.TrayPace, s.TrayNoCost = cur.TrayUsages, cur.TrayUsage, cur.TrayUsageEvery, cur.TrayNoLogos, cur.TrayNoBird, cur.TrayPace, cur.TrayNoCost
 	s.TrayWindows, s.TrayNoNumber = cur.TrayWindows, cur.TrayNoNumber
+	s.TrayRings = cur.TrayRings
 	s.GatewayMode = cur.GatewayMode
 	s.NoWSLAgents = cur.NoWSLAgents
 	s.QuotaReads = cur.QuotaReads

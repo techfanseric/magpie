@@ -7,6 +7,7 @@ package gui
 #cgo LDFLAGS: -framework AppKit
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #import <Cocoa/Cocoa.h>
 
 typedef struct {
@@ -14,7 +15,10 @@ typedef struct {
 	int iconLen;
 	int mono;
 	int plain; // no logo: the rows alone, a thin line before
+	int ring, known, failed, low, paced, active;
+	double share, pace;
 	const char *id;
+	const char *title;
 	const char *letter;
 	const char *rows; // one or two, a newline between
 } mpTrayCell;
@@ -62,7 +66,12 @@ static NSArray *mpCells(mpTrayCell *cells, int n) {
 			if (im != nil && im.representations.count > 0) c[@"icon"] = im;
 			[im release];
 		}
+		c[@"active"] = @(cells[i].active);
+		c[@"ring"] = @(cells[i].ring); c[@"known"] = @(cells[i].known);
+		c[@"failed"] = @(cells[i].failed); c[@"low"] = @(cells[i].low);
+		c[@"paced"] = @(cells[i].paced); c[@"share"] = @(cells[i].share); c[@"pace"] = @(cells[i].pace);
 		c[@"id"] = [NSString stringWithUTF8String:cells[i].id ? cells[i].id : ""];
+		c[@"title"] = [NSString stringWithUTF8String:cells[i].title ? cells[i].title : ""];
 		c[@"mono"] = @(cells[i].mono != 0);
 		c[@"plain"] = @(cells[i].plain != 0);
 		c[@"letter"] = [NSString stringWithUTF8String:cells[i].letter ? cells[i].letter : ""];
@@ -75,6 +84,7 @@ static NSArray *mpCells(mpTrayCell *cells, int n) {
 }
 
 static CGFloat mpColumn(NSDictionary *c) {
+	if ([c[@"ring"] boolValue]) return 22;
 	NSArray *rows = c[@"rows"];
 	NSDictionary *attrs = @{NSFontAttributeName: mpRowFont((int)rows.count)};
 	CGFloat w = 0;
@@ -86,6 +96,7 @@ static CGFloat mpColumn(NSDictionary *c) {
 // cell before (the bird's for the first); a cell without its logo has the
 // line between it and the one before instead.
 static CGFloat mpLead(NSDictionary *c, BOOL first) {
+	if ([c[@"ring"] boolValue]) return first ? 0 : 2;
 	if ([c[@"plain"] boolValue]) return first ? mpPlainGap : mpSepGap + mpSep + mpSepGap;
 	return (first ? 0 : mpCellGap) + mpLogo + mpLogoGap;
 }
@@ -208,6 +219,98 @@ static void mpRows(NSDictionary *c, CGFloat x, CGFloat h, NSColor *ink) {
 	}
 }
 
+// Live activity is updated independently of the slowly refreshed quotas.
+// All access is on AppKit's main thread. Preview PNGs use a fixed phase.
+static NSDictionary *mpActivities;
+static NSTimer *mpMotion;
+static BOOL mpReduced;
+static double mpPreviewPhase = -1;
+static BOOL mpPreviewReduced;
+static NSString *mpBaseTip;
+
+static int mpActiveCount(NSDictionary *c) {
+	NSDictionary *a = mpActivities[[c[@"id"] lowercaseString]];
+	return a != nil ? [a[@"count"] intValue] : [c[@"active"] intValue];
+}
+
+static void mpRingWaves(NSDictionary *c, NSPoint center, CGFloat k, NSColor *label) {
+	int n = MIN(5, MAX(0, mpActiveCount(c)));
+	if (!n) return;
+	BOOL reduced = mpPreviewPhase >= 0 ? mpPreviewReduced : mpReduced || NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion;
+	double phase = reduced ? 0 : mpPreviewPhase >= 0 ? mpPreviewPhase : fmod(NSProcessInfo.processInfo.systemUptime / 1.8, 1);
+	NSColor *ink = NSColor.controlAccentColor;
+	for (int i = 0; i < n; i++) {
+		double head = fmod(1 - phase + (double)i/n, 1);
+		for (int j = 0; j < 16; j++) {
+			double lo = head + 0.16*j/16, hi = head + 0.16*(j+1)/16;
+			for (int wrap = 0; wrap <= 1; wrap++) {
+				double a = MAX(lo-wrap, 52.0/360), b = MIN(hi-wrap, 308.0/360);
+				if (b <= a) continue; // the top opening stays empty as a wave crosses it
+				NSBezierPath *p = [NSBezierPath bezierPath];
+				[p appendBezierPathWithArcWithCenter:center radius:155.975*k startAngle:-90+a*360 endAngle:-90+b*360 clockwise:NO];
+				p.lineWidth = 1.15; p.lineCapStyle = NSLineCapStyleRound;
+				[[ink colorWithAlphaComponent:pow(1-(double)j/16,0.65)] setStroke]; [p stroke];
+			}
+		}
+	}
+}
+
+// mpRing draws a 22pt quota unit: the provider initial above an open arc,
+// with an optional static reserve/deficit fan. Exact figures stay in the tooltip.
+static void mpRingArc(NSPoint center, CGFloat radius, CGFloat width, CGFloat share, NSColor *ink) {
+	if (share <= 0) return;
+	NSBezierPath *p = [NSBezierPath bezierPath];
+	[p appendBezierPathWithArcWithCenter:center radius:radius startAngle:-38 endAngle:-38 + 256 * MIN(1, share) clockwise:NO];
+	p.lineWidth = width; p.lineCapStyle = NSLineCapStyleRound;
+	[ink setStroke]; [p stroke];
+}
+
+static void mpRingFan(NSPoint c, CGFloat inner, CGFloat outer, CGFloat middle, CGFloat fraction, NSColor *ink) {
+	if (fraction <= 0) return;
+	CGFloat half = 48 * MIN(1, fraction);
+	NSBezierPath *p = [NSBezierPath bezierPath];
+	[p appendBezierPathWithArcWithCenter:c radius:outer startAngle:middle-half endAngle:middle+half clockwise:NO];
+	[p appendBezierPathWithArcWithCenter:c radius:inner startAngle:middle+half endAngle:middle-half clockwise:YES];
+	[p closePath]; [ink setFill]; [p fill];
+}
+
+static void mpRing(NSDictionary *c, CGFloat x, CGFloat h, NSColor *label) {
+	CGFloat k = MIN(22.0 / 367, h / 410);
+	NSPoint center = NSMakePoint(x + 11, (h - 410*k)/2 + 226.5*k);
+	BOOL known = [c[@"known"] boolValue], failed = [c[@"failed"] boolValue];
+	NSColor *ink = failed ? NSColor.systemRedColor : [c[@"low"] boolValue] ? NSColor.systemOrangeColor : label;
+	NSColor *muted = [label colorWithAlphaComponent:0.22];
+	mpRingArc(center, 155.975*k, 55.05*k, 1, muted);
+	if (known) mpRingArc(center, 155.975*k, 55.05*k, [c[@"share"] doubleValue], ink);
+	mpRingWaves(c, center, k, label);
+	NSDictionary *attrs = @{NSFontAttributeName: [NSFont systemFontOfSize:130*k weight:NSFontWeightBold], NSForegroundColorAttributeName: ink};
+	NSString *letter = c[@"letter"];
+	[letter drawAtPoint:NSMakePoint(x + 11 - [letter sizeWithAttributes:attrs].width/2, (h-410*k)/2 - 1*k) withAttributes:attrs];
+	if (failed) {
+		[ink setFill];
+		[[NSBezierPath bezierPathWithRoundedRect:NSMakeRect(center.x-95*k, center.y-26*k, 190*k, 52*k) xRadius:26*k yRadius:26*k] fill];
+		return;
+	}
+	if (!known) {
+		NSDictionary *a = @{NSFontAttributeName: [NSFont systemFontOfSize:6 weight:NSFontWeightMedium], NSForegroundColorAttributeName: label};
+		[@"?" drawAtPoint:NSMakePoint(center.x-2, center.y-4) withAttributes:a];
+		return;
+	}
+	[ink setFill];
+	[[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(center.x-19*k, center.y-19*k, 38*k, 38*k)] fill];
+	if (![c[@"paced"] boolValue]) return;
+	CGFloat pace = [c[@"pace"] doubleValue], fill = MIN(1, fabs(pace)/0.25);
+	for (int i = 0; i < 2; i++) {
+		CGFloat inner = (i == 0 ? 42 : 82)*k, outer = (i == 0 ? 69 : 109)*k;
+		for (int side = -1; side <= 1; side += 2) {
+			CGFloat middle = side * 90;
+			mpRingFan(center, inner, outer, middle, 1, muted);
+			if ((pace > 0 && side == -1) || (pace < 0 && side == 1))
+				mpRingFan(center, inner, outer, middle, MAX(0, fill*2-i), ink);
+		}
+	}
+}
+
 // mpDraw draws the bird, then each cell, top down (a flipped context).
 static void mpDraw(NSArray *cells, NSImage *bird, CGFloat h) {
 	if (bird != nil) mpTinted(bird, NSMakeRect(0, 0, h, h));
@@ -215,6 +318,13 @@ static void mpDraw(NSArray *cells, NSImage *bird, CGFloat h) {
 	NSColor *ink = [NSColor labelColor];
 	BOOL first = YES;
 	for (NSDictionary *c in cells) {
+		if ([c[@"ring"] boolValue]) {
+			x += mpLead(c, first);
+			mpRing(c, x, h, ink);
+			x += mpColumn(c);
+			first = NO;
+			continue;
+		}
 		if ([c[@"plain"] boolValue]) {
 			if (!first) {
 				[[ink colorWithAlphaComponent:0.35] set];
@@ -267,6 +377,13 @@ static void mpStarts(NSArray *cells, CGFloat in, CGFloat *out) {
 	BOOL first = YES;
 	int i = 0;
 	for (NSDictionary *c in cells) {
+		if ([c[@"ring"] boolValue]) {
+			pos += mpLead(c, first);
+			out[i++] = pos;
+			pos += mpColumn(c);
+			first = NO;
+			continue;
+		}
 		if ([c[@"plain"] boolValue]) {
 			out[i] = first ? pos : pos + mpSepGap;
 			pos += mpLead(c, first);
@@ -346,6 +463,51 @@ static void mpApply(void) {
 	mpHitW = im.size.width;
 }
 
+// Stop the animation timer as soon as no visible ring is active. Idle and
+// reduced-motion modes never run a frame timer, nor trigger quota reads.
+static void mpMotionUpdate(void) {
+	BOOL active = NO;
+	for (NSDictionary *c in mpShown) if ([c[@"ring"] boolValue] && mpActiveCount(c)>0) { active=YES; break; }
+	BOOL reduced = mpReduced || NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion;
+	if (!active || reduced || mpButton()==nil) {
+		[mpMotion invalidate]; [mpMotion release]; mpMotion=nil;
+	} else if (mpMotion==nil) {
+		mpMotion = [[NSTimer timerWithTimeInterval:1.0/12 repeats:YES block:^(NSTimer *timer) {
+			if (mpButton()==nil || NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion) { mpMotionUpdate(); return; }
+			mpApply();
+		}] retain];
+		[NSRunLoop.mainRunLoop addTimer:mpMotion forMode:NSRunLoopCommonModes];
+	}
+}
+
+static void mpActivityTip(void) {
+	NSMutableArray *parts=[NSMutableArray array];
+	if (mpBaseTip.length) [parts addObject:mpBaseTip];
+	for (NSDictionary *c in mpShown) {
+		NSDictionary *a=mpActivities[[c[@"id"] lowercaseString]];
+		if ([c[@"ring"] boolValue] && a!=nil) [parts addObject:[NSString stringWithFormat:@"%@\n%@",c[@"title"],a[@"tip"]]];
+	}
+    if (mpActivities[@""]!=nil) {
+        for (NSDictionary *c in mpShown) if ([c[@"ring"] boolValue]) { [parts addObject:mpActivities[@""][@"tip"]]; break; }
+    }
+	NSString *tip=[parts componentsJoinedByString:@"\n\n"];
+	mpButton().toolTip=tip.length ? tip : nil;
+}
+
+static void mpActivity(mpTrayCell *cells,int n,int reduced) {
+	@autoreleasepool {
+		NSMutableDictionary *all=[[NSMutableDictionary alloc] init];
+		for (int i=0;i<n;i++) {
+			NSString *id=[NSString stringWithUTF8String:cells[i].id];
+			all[id.lowercaseString]=@{@"count":@(cells[i].active),@"tip":[NSString stringWithUTF8String:cells[i].rows]};
+		}
+		dispatch_sync(dispatch_get_main_queue(), ^{
+			[mpActivities release]; mpActivities=all; mpReduced=reduced!=0;
+			mpMotionUpdate(); mpApply(); mpActivityTip();
+		});
+	}
+}
+
 static NSImage *mpBirdImage(const void *bird, int len) {
 	if (bird == NULL || len <= 0) return nil; // the cells alone
 	NSImage *im = [[NSImage alloc] initWithData:[NSData dataWithBytes:bird length:len]];
@@ -367,7 +529,12 @@ static int mpShow(mpTrayCell *cells, int n, const void *bird, int len) {
 			[mpShown release];
 			[mpBird release];
 			mpShown = cs;
+            static dispatch_once_t motionObserver;
+            dispatch_once(&motionObserver, ^{
+                [NSWorkspace.sharedWorkspace.notificationCenter addObserverForName:NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note){mpMotionUpdate();mpApply();}];
+            });
 			mpBird = [bi retain];
+			mpMotionUpdate(); mpActivityTip();
 			mpApply();
 			ok = 1;
 		});
@@ -412,7 +579,8 @@ static int mpTip(const char *tip) {
 		dispatch_sync(dispatch_get_main_queue(), ^{
 			NSStatusBarButton *b = mpButton();
 			if (b == nil) return;
-			mpTipOn(b, s);
+			[mpBaseTip release]; mpBaseTip=[s copy];
+			mpActivityTip();
 			ok = 1;
 		});
 	}
@@ -434,6 +602,7 @@ static void mpHide(void) {
 	dispatch_async(dispatch_get_main_queue(), ^{
 		[mpShown release];
 		mpShown = nil;
+		mpMotionUpdate();
 		mpHitW = 0; // every click is the item's whole one again
 	});
 }
@@ -474,7 +643,7 @@ static void mpOwnClicks(void) {
 
 // mpPNG draws the image as the menu bar would at scale, light or dark, on
 // the bar's colour when bg is set: for tests and previews.
-static void *mpPNG(mpTrayCell *cells, int n, const void *bird, int len, CGFloat h, CGFloat scale, int dark, int bg, int *outLen, int *pxW, int *pxH) {
+static void *mpPNG(mpTrayCell *cells, int n, const void *bird, int len, CGFloat h, CGFloat scale, int dark, int bg, double phase, int reduced, int *outLen, int *pxW, int *pxH) {
 	__block void *out = NULL;
 	@autoreleasepool {
 		NSArray *cs = mpCells(cells, n);
@@ -489,6 +658,7 @@ static void *mpPNG(mpTrayCell *cells, int n, const void *bird, int len, CGFloat 
 		NSAppearance *look = [NSAppearance appearanceNamed:dark ? NSAppearanceNameDarkAqua : NSAppearanceNameAqua];
 		[NSGraphicsContext saveGraphicsState];
 		[NSGraphicsContext setCurrentContext:g];
+		double savedPhase=mpPreviewPhase; mpPreviewPhase=phase; BOOL savedReduced=mpPreviewReduced; mpPreviewReduced=reduced!=0;
 		void (^paint)(void) = ^{
 			if (bg) {
 				[(dark ? [NSColor colorWithSRGBRed:0.16 green:0.16 blue:0.17 alpha:1] : [NSColor colorWithSRGBRed:0.93 green:0.93 blue:0.94 alpha:1]) set];
@@ -501,6 +671,7 @@ static void *mpPNG(mpTrayCell *cells, int n, const void *bird, int len, CGFloat 
 		} else {
 			paint(); // the system's own look, light or dark as it is
 		}
+		mpPreviewPhase=savedPhase; mpPreviewReduced=savedReduced;
 		[g flushGraphics];
 		[NSGraphicsContext restoreGraphicsState];
 		NSData *png = [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
@@ -561,11 +732,29 @@ func withCells(cells []trayCell, f func(*C.mpTrayCell, C.int)) {
 	cs := (*[1 << 16]C.mpTrayCell)(C.malloc(C.size_t(len(cells)) * C.size_t(unsafe.Sizeof(C.mpTrayCell{}))))[:len(cells):len(cells)]
 	var owned []unsafe.Pointer
 	for i, c := range cells {
-		cs[i] = C.mpTrayCell{id: C.CString(c.ID), letter: C.CString(c.Letter), rows: C.CString(strings.Join(c.Rows, "\n"))}
-		owned = append(owned, unsafe.Pointer(cs[i].id), unsafe.Pointer(cs[i].letter), unsafe.Pointer(cs[i].rows))
+		cs[i] = C.mpTrayCell{id: C.CString(c.ID), title: C.CString(c.Title), letter: C.CString(c.Letter), rows: C.CString(strings.Join(c.Rows, "\n"))}
+		owned = append(owned, unsafe.Pointer(cs[i].id), unsafe.Pointer(cs[i].title), unsafe.Pointer(cs[i].letter), unsafe.Pointer(cs[i].rows))
 		if len(c.Icon) > 0 {
 			cs[i].icon, cs[i].iconLen = C.CBytes(c.Icon), C.int(len(c.Icon))
 			owned = append(owned, cs[i].icon)
+		}
+		if r := c.Ring; r != nil {
+			cs[i].ring = 1
+			cs[i].active = C.int(r.Active)
+			if r.Share != nil {
+				cs[i].known = 1
+				cs[i].share = C.double(*r.Share)
+			}
+			if r.Pace != nil {
+				cs[i].paced = 1
+				cs[i].pace = C.double(*r.Pace)
+			}
+			if r.Error {
+				cs[i].failed = 1
+			}
+			if r.Low {
+				cs[i].low = 1
+			}
 		}
 		if c.Mono {
 			cs[i].mono = 1
@@ -640,11 +829,19 @@ func trayOwnClicks() { C.mpOwnClicks() }
 // scale (2 for a Retina screen), light or dark, on the bar's colour when
 // bg; with its size in pixels.
 func trayImagePNG(cells []trayCell, bird []byte, h, scale float64, dark, bg bool) (png []byte, w, ht int) {
+	return trayImagePNGPhase(cells, bird, h, scale, dark, bg, 0)
+}
+
+func trayImagePNGPhase(cells []trayCell, bird []byte, h, scale float64, dark, bg bool, phase float64) (png []byte, w, ht int) {
+	return trayImagePNGRender(cells, bird, h, scale, dark, bg, phase, false)
+}
+
+func trayImagePNGRender(cells []trayCell, bird []byte, h, scale float64, dark, bg bool, phase float64, reduced bool) (png []byte, w, ht int) {
 	b, n := cBytes(bird)
 	defer C.free(b)
 	withCells(cells, func(cs *C.mpTrayCell, count C.int) {
 		var size, pw, ph C.int
-		p := C.mpPNG(cs, count, b, n, C.CGFloat(h), C.CGFloat(scale), cBool(dark), cBool(bg), &size, &pw, &ph)
+		p := C.mpPNG(cs, count, b, n, C.CGFloat(h), C.CGFloat(scale), cBool(dark), cBool(bg), C.double(phase), cBool(reduced), &size, &pw, &ph)
 		if p != nil {
 			png = C.GoBytes(p, size)
 			C.free(p)
@@ -701,4 +898,9 @@ func trayImageClickAt(cells []trayCell, bird bool, h, x float64, modifiers uint6
 		hit = C.mpClickCellsAt(cs, count, b, C.CGFloat(h), C.CGFloat(x), C.ulong(modifiers)) != 0
 	})
 	return hit
+}
+
+// trayImageActivity updates only the motion and its exact model counts.
+func trayImageActivity(cells []trayCell, reduced bool) {
+	withCells(cells, func(cs *C.mpTrayCell, n C.int) { C.mpActivity(cs, n, cBool(reduced)) })
 }

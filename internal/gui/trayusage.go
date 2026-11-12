@@ -678,11 +678,13 @@ func trayName(q provider.SubscriptionQuota) string {
 // "18%"), or its balance alone.
 type trayCell struct {
 	ID     string // stable provider/account identity, captured with the drawn cell
+	Title  string // the existing human-facing card name, for its live activity
 	Icon   []byte // the logo as the Usage page has it (SVG or PNG); nil for none
 	Mono   bool   // a black glyph, drawn in the menu bar's text colour
 	Letter string // drawn in its place when there is no logo, or it can't be read
 	Plain  bool   // no logo nor letter, as Settings says: the rows alone, a line before
 	Rows   []string
+	Ring   *trayRing // optional compact quota, macOS only
 }
 
 // trayPlain are the cells without their logos (settings.TrayNoLogos):
@@ -716,7 +718,7 @@ func trayCardsView(lang string, cards []provider.SubscriptionQuota, now time.Tim
 			continue
 		}
 		labels = append(labels, l)
-		c := trayCell{ID: trayCardID(q), Rows: strings.Split(l, " · ")}
+		c := trayCell{ID: trayCardID(q), Title: trayName(q), Rows: strings.Split(l, " · ")}
 		for i, r := range c.Rows {
 			c.Rows[i] = trayRow(r)
 		}

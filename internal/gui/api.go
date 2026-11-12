@@ -1606,7 +1606,7 @@ func Handler(w Windows, gw *gateway.Server) http.Handler {
 		// which of each subscription's windows, and the language the tooltip
 		// is in (yi_time)
 		if (!slices.Equal(settings.Load().TrayUsages, cur.TrayUsages) || in.TrayUsageEvery != cur.TrayUsageEvery ||
-			in.TrayNoLogos != cur.TrayNoLogos || in.TrayNoBird != cur.TrayNoBird || in.TrayNoNumber != cur.TrayNoNumber || in.TrayPace != cur.TrayPace ||
+			in.ReduceMotion != cur.ReduceMotion || in.TrayRings != cur.TrayRings || in.TrayNoLogos != cur.TrayNoLogos || in.TrayNoBird != cur.TrayNoBird || in.TrayNoNumber != cur.TrayNoNumber || in.TrayPace != cur.TrayPace ||
 			in.TrayNoCost != cur.TrayNoCost || !maps.EqualFunc(in.TrayWindows, cur.TrayWindows, slices.Equal) || in.Lang != cur.Lang) && onTrayUsage != nil {
 			onTrayUsage()
 		}

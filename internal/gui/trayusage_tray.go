@@ -21,7 +21,13 @@ import (
 // today's total in the tooltip while there are none (trayIdleTip).
 func (h *host) watchTrayUsage() {
 	wake := make(chan struct{}, 1)
+	activityWake := make(chan struct{}, 1)
+	h.watchTrayActivity(activityWake)
 	onTrayUsage = func() {
+		select {
+		case activityWake <- struct{}{}:
+		default:
+		}
 		select {
 		case wake <- struct{}{}:
 		default:
@@ -49,10 +55,14 @@ func (h *host) watchTrayUsage() {
 			s := settings.Load()
 			// in magpie's language, as the tray menu is (yi_time)
 			lang := trayLang(s.Lang, systemLang)
-			cells, label, tip := trayCardsView(lang, trayUsageCards(ctx, lang, s.TrayUsages), time.Now(), s.QuotaLeft, s.TrayPace, s.TrayWindows)
+			cards := trayUsageCards(ctx, lang, s.TrayUsages)
+			cells, label, tip := trayCardsView(lang, cards, time.Now(), s.QuotaLeft, s.TrayPace, s.TrayWindows)
 			cancel()
 			if s.TrayNoLogos {
 				cells = trayPlain(cells)
+			}
+			if runtime.GOOS == "darwin" && s.TrayRings {
+				cells = trayRingCells(cells, cards, time.Now(), s.QuotaLeft, s.TrayPace, s.TrayWindows)
 			}
 			if tip == "" {
 				currency, rate := trayCurrency()
